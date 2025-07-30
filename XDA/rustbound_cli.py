@@ -321,33 +321,6 @@ def unified_gen_training(
     Pretraining requires a minimum of 4 bins for pre training 
     '''
 
-    # TODO warnings
-
-    #dataset_bins = Path("../datasets/20_file_subset/")
-    #if not dataset_bins.exists():
-    #    print("Dataset does not exist")
-    #    return 
-    #
-    #pretrain_tot = []
-    #valid_tot = []
-    #finetune_tot = []
-
-    #for subset in dataset_bins.iterdir():
-    #    # 9 files in the subset goes to pretrain
-    #    # 1 file goes to validation 
-    #    # 10 files go to fintune 
-    #    subset_files = list(subset.glob('*'))
-    #    pretrain_tot.extend(subset_files[:9])
-    #    valid_tot.append(subset_files[9])
-    #    finetune_tot.extend(subset_files[10:])
-
-    #generate_data_src_pretrain_all(pretrain_tot, valid_tot)
-    #generate_data_src_finetune_for_funcbound(finetune_tot)
-    #print("Ready to train new model...")
-
-    # TODO: Hardcoded
-    # Go to each of the previously used dataset, and pick bins
-
     # Store the bins
     pretrain_dict = {}
     finetune_dict = {}
@@ -379,9 +352,6 @@ def unified_gen_training(
         for bin in finetune_bins:
             finetune_tot.append(bin)
         finetune_dict[dir] = finetune_bins
-
-        #bins_for_valid = [ x for x in list(pretrain.glob('*')) if x not in pretrain_bins]
-        #valid_bins = random.sample(bins_for_valid, num_valid)
 
         for bin in valid_bins:
             valid_tot.append(bin)
@@ -447,6 +417,56 @@ def cherry_pick_test(
     return 
 
 
+#TODO: Force generationg of gen finetune and gen pretrain at the same tiem 
+#      So that we don't acciendatally overlap binary selection
+@app.command()
+def gen_pretrain_data(
+    bin_dir: Annotated[Path, typer.Argument()],
+    num_train_bins: Annotated[int, typer.Argument()],
+    cache_dataset: Annotated[Path, typer.Argument()]=None,
+    ):
+    """
+    Preprocess data for finetuning 
+    """
+
+    bins_path = Path(bin_dir)
+    if not bins_path.exists():
+        print(f"Bin path {bins_path} does not exist")
+        return
+
+    # Get the bins... 
+    # Need to load the dataset and each bins info for thi
+    #bins_list = list(bins_path.rglob('*'))
+
+    bin_bundles = load_bins(bin_dir)
+
+    # Chop down the list 
+    sampled_bundles = random.sample(bin_bundles, num_train_bins)
+
+    # Get a list of just the binaries to pass to the generator
+    bins = [x.bin for x in sampled_bundles]
+
+    print(f"Caching the datasets at {cache_dataset.absolute()}")
+    if cache_dataset is not None:
+        if cache_dataset.is_file():
+            print(f"the cache dataset path exists but it is a file")
+            return 
+        elif not cache_dataset.exists(): 
+            cache_dataset.mkdir()
+
+        train_out = cache_dataset.joinpath("train")
+        train_out.mkdir()
+
+        # Save the bundles
+        for bundle in sampled_bundles:
+            # Copy the binary and the bundle
+            shutil.copytree(bundle.bin.parent, train_out.joinpath(f"{bundle.bin.parent.name}"))
+
+
+    generate_data_src_finetune_for_funcbound(bins)
+    return 
+
+
 
 #TODO: Force generationg of gen finetune and gen pretrain at the same tiem 
 #      So that we don't acciendatally overlap binary selection
@@ -498,21 +518,40 @@ def gen_finetune_data(
     return 
 
 
-#TODO
-def copy_bundle_tree(inp: List[Path], out: Path):
+@app.command()
+def gen_pre_fine(
+        bin_dir: Annotated[Path, typer.Argument()],
+):
     """
-    Copy a tree of bundles
+    Loads the bins from gen_data_splits and remakes the 
+    data-src
     """
 
-    out.mkdir()
+    # train bins 
+    train_dir = bin_dir.joinpath(f"{bin_dir.name}_train/train")
+    assert train_dir.exists()
+    train_bins_list = load_bins(train_dir)
 
-    # Save the bundles
-    for bundle in inp:
-        # Copy the binary and the bundle
-        shutil.copytree(bundle.bin.parent, train_out.joinpath(f"{bundle.bin.parent.name}"))
-    return 
+    # valid bins 
+    valid_dir = bin_dir.joinpath(f"{bin_dir.name}_train/valid")
+    assert valid_dir.exists()
+    valid_bins_list = load_bins(valid_dir)
 
+    # fine bins
+    fine_dir = bin_dir.joinpath(f"{bin_dir.name}_fine/")
+    assert fine_dir.exists()
+    fine_bins_list = load_bins(fine_dir)
 
+    train_bins = [x.bin for x in train_bins_list]
+    valid_bins = [x.bin for x in valid_bins_list]
+
+    # Make the list for finetuning
+    finetune_bins = [x.bin for x in fine_bins_list]
+
+    generate_data_src_pretrain_all(train_bins, valid_bins)
+    generate_data_src_finetune_for_funcbound(finetune_bins)
+
+    return
 
 
 @app.command()
@@ -550,7 +589,6 @@ def gen_data_splits(
         bundle = random.sample(bins_list, 1)[0]
         if bundle not in training_bins and bundle not in finetune_bundle:
             finetune_bundle.append(bundle)
-        
 
 
     # Get random valudation bins, default to 4 of them 
@@ -569,9 +607,10 @@ def gen_data_splits(
 
     # Save the training data
     train_out.mkdir(exist_ok=True)
-    train_out = train_out.joinpath("train")
+    train_base = train_out
+    train_out = train_base.joinpath("train")
     train_out.mkdir()
-    valid_out = train_out.joinpath("valid")
+    valid_out = train_base.joinpath("valid")
     valid_out.mkdir()
 
 
