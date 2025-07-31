@@ -554,6 +554,100 @@ def gen_pre_fine(
     return
 
 
+
+@app.command()
+def gen_pretrain_and_finetune(
+        bin_dir: Annotated[Path, typer.Argument()],
+        num_train_bins: Annotated[int, typer.Argument()],
+        num_validation_bins: Annotated[int, typer.Argument()],
+        num_finetune_bins: Annotated[int, typer.Argument()],
+        train_out: Annotated[Path, typer.Argument()],
+        finetune_out: Annotated[Path, typer.Argument()],
+        test_out: Annotated[Path, typer.Argument()],
+    ):
+    """
+    Generate the data splits for: 
+        pretraining
+        finetuning 
+        testing
+
+    The bin dir should be a directory of the bins (not the bundles used in 
+    other functions)
+    """
+
+    if not bin_dir.exists():
+        print(f"Bin path {bin_dir} does not exist")
+        return
+
+
+    # Load all the binaries
+    bins_list = list(bin_dir.glob('*'))
+
+    # Sample for training 
+    training_bins = random.sample(bins_list, num_train_bins+num_validation_bins)
+
+    finetune_bundle = []
+
+    # Sample for finetuning
+    while len(finetune_bundle) < num_finetune_bins:
+        bundle = random.sample(bins_list, 1)[0]
+        if bundle not in training_bins and bundle not in finetune_bundle:
+            finetune_bundle.append(bundle)
+
+
+    # Get random valudation bins, default to 4 of them 
+    valid_bundle = random.sample(training_bins, num_validation_bins)
+    train_bundle = [x for x in training_bins if x not in valid_bundle]
+
+    # Get a list of just the binaries to pass to the generator
+    valid_bins = [x.bin for x in valid_bundle]
+    train_bins = [x.bin for x in train_bundle]
+
+    # Make the list for finetuning
+    finetune_bins = [x.bin for x in finetune_bundle]
+
+    # Get the remained of the dataset 
+    test_bins = [x for x in bins_list if x not in training_bins and x not in finetune_bundle]
+
+    # Save the training data
+    train_out.mkdir(exist_ok=True)
+    train_base = train_out
+    train_out = train_base.joinpath("train")
+    train_out.mkdir()
+    valid_out = train_base.joinpath("valid")
+    valid_out.mkdir()
+
+
+    # Save the bundles
+    for bundle in train_bundle:
+        # Copy the binary and the bundle
+        shutil.copytree(bundle.bin.parent, train_out.joinpath(f"{bundle.bin.parent.name}"))
+
+    # Save the bundles
+    for bundle in valid_bundle:
+        # Copy the binary and the bundle
+        shutil.copytree(bundle.bin.parent, valid_out.joinpath(f"{bundle.bin.parent.name}"))
+
+    # Save the finetuning data
+    finetune_out.mkdir(exist_ok=True)
+    for bundle in finetune_bundle:
+        # Copy the binary and the bundle
+        shutil.copytree(bundle.bin.parent, finetune_out.joinpath(f"{bundle.bin.parent.name}"))
+
+    # Save the test out 
+    test_out.mkdir(exist_ok=True)
+    for bundle in test_bins:
+        # Copy the binary and the bundle
+        shutil.copytree(bundle.bin.parent, test_out.joinpath(f"{bundle.bin.parent.name}"))
+
+    generate_data_src_pretrain_all(train_bins, valid_bins)
+    generate_data_src_finetune_for_funcbound(finetune_bins)
+
+    return
+
+
+
+
 @app.command()
 def gen_data_splits(
         bin_dir: Annotated[Path, typer.Argument()],
