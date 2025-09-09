@@ -5,20 +5,19 @@ import shlex
 import shutil
 import subprocess
 from dataclasses import dataclass
-from enum import Enum
 from multiprocessing import Pool
 from pathlib import Path
-from typing import List
 
 import lief
 import typer
 from alive_progress import alive_bar, alive_it
+
 #from .cli_utils import get_enum_type, opt_lvl_callback
-from .cli_utils import get_enum_type, opt_lvl_callback
+from cli_utils import get_enum_type, opt_lvl_callback
+
 from rich import print
 from rich.console import Console
 from rich.progress import track
-from rich.table import Table
 from typing_extensions import Annotated
 
 from ripkit.cargo_picky import (CrateBuildException, LocalCratesIO,
@@ -201,7 +200,7 @@ class BinInfoBundle:
 
 def load_bins(
     bin_path: Path,
-) -> List[BinInfoBundle]:
+) -> list[BinInfoBundle]:
     """
     Get the binaries from an exported dataset of 
 
@@ -222,25 +221,11 @@ def load_bins(
         if info == {}: 
             continue
 
-        #try:
-        #    with open(info_file, "r") as f:
-        #        info = json.load(f)
-        #except FileNotFoundError:
-        #    print(f"File not found: {info_file}")
-        #    continue
-        #except json.JSONDecodeError as e:
-        #    print(f"JSON decoding error: {e}")
-        #    continue
-        #except Exception as e:
-        #    print(f"An error occurred: {e}")
-        #    continue
-
         if info['binary_hash'] in hashes:
             continue
 
         hashes.append(info['binary_hash'])
         bins.append(BinInfoBundle(parent.joinpath(info["binary_name"]).absolute(), info_file.absolute()))
-
     return bins
 
 
@@ -250,7 +235,7 @@ def get_bins(
     target: RustcTarget,
     optimization: RustcOptimization,
     bin_path: Path = Path("~/.ripbin/ripped_bins/").expanduser(),
-) -> List[BinInfoBundle]:
+) -> list[BinInfoBundle]:
     """
     Get all binaries of the target
     """
@@ -323,7 +308,7 @@ def print_compile_time_attacks():
 @app.command()
 def build_stash_all(
     opt_lvl: Annotated[
-        List[str], typer.Argument(help="The optimization level to compile for")
+        list[str], typer.Argument(help="The optimization level to compile for")
     ],
     target: Annotated[str, typer.Argument(help="crate target")],
     num_workers: Annotated[int, typer.Option(help="number of workers")] = CPU_COUNT_75,
@@ -366,7 +351,7 @@ def build_stash_all(
 
         target_enum = get_enum_type(RustcTarget, target)
 
-        # List of crate current installed that can be built
+        # list of crate current installed that can be built
         crates_to_build = [
             x.name for x in Path(LocalCratesIO.CRATES_DIR.value).iterdir() if x.is_dir()
         ]
@@ -448,7 +433,7 @@ def seq_build_all_and_stash(
 
     target_enum = get_enum_type(RustcTarget, target)
 
-    # List of crate current installed that can be built
+    # list of crate current installed that can be built
     crates_to_build = [
         x.name for x in Path(LocalCratesIO.CRATES_DIR.value).iterdir() if x.is_dir()
     ]
@@ -503,7 +488,7 @@ def seq_build_all_and_stash(
 def export_dataset(
     output: Annotated[Path, typer.Argument(help="Directory to save binaries to")],
     target: Annotated[str, typer.Argument(help="Compilation Target")],
-    opt: Annotated[List[str], typer.Argument(help="Opt Lvl of bin")],
+    opt: Annotated[list[str], typer.Argument(help="Opt Lvl of bin")],
     min_text_bytes: Annotated[
         int, typer.Option(help="Minimum number of bytes in a files .text section")
     ] = 0,

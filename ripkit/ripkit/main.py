@@ -31,7 +31,9 @@ from typing_extensions import Annotated
 from ripkit.cargo_picky import (CrateBuildException, RustcStripFlags,
                                 RustcTarget, build_crate)
 
-from ripkit.ripbin import (AnalysisType, RustFileBundle, calculate_md5,
+from ripkit.ripbin_cli import load_bins
+
+from ripkit.ripbin import (AnalysisType, RustFileBundle, calculate_md5, 
                            disasm_at, generate_minimal_labeled_features,
                            get_functions, iterable_path_shallow_callback,
                            save_analysis)
@@ -260,6 +262,22 @@ def stats(
         print(f"    {data.files} files")
         print(f"    {data.size} bytes")
     return
+
+
+
+@app.command()
+def export(
+    inp: Annotated[Path, typer.Argument()],
+    out: Annotated[Path, typer.Argument()]):
+    """Export the bins in the dirtectory. The direcoty must contain bundles.
+    """
+
+    bundles = load_bins(inp)
+    out.mkdir(exist_ok=True)
+    for bundle in bundles:
+        shutil.copyfile(bundle.bin, out.joinpath(bundle.bin.name))
+
+    return 
 
 
 # TODO: output file should be depreciated
